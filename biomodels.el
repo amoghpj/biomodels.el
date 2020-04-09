@@ -59,13 +59,19 @@ This returns the top 10 model IDs from biomodels"
   "Download model under point."
   (interactive)
   (let ((modelid (aref (tabulated-list-get-entry) 0)))
-    (shell-command (concat "curl -X GET https://www.ebi.ac.uk/biomodels/search/download?models=" modelid
-                           " -H \"accept: application/zip\" --output " biomodels-download-folder modelid)))
-      ;; :params `(("models" . ,(format "%s" modelid)))
-      ;; :encoding 'binary
-      ;; :headers '(("accept" . "application/zip"))
-      ;; :type "GET"
-      ;; )
+    (request
+      "https://www.ebi.ac.uk/biomodels/search/download"
+      :params `(("models" . ,(format "%s" modelid)))
+      :encoding 'binary
+      :headers '(("accept" . "application/zip"))
+      :type "GET"
+      :success (cl-function
+                (lambda (&key data &allow-other-keys)
+                  (let ((coding-system-for-write 'binary))
+                    (write-region data nil (concat
+                                            biomodels-download-folder
+                                            modelid
+                                            ".zip"))))))
     )
 (define-derived-mode biomodels-mode tabulated-list-mode "biomodels"
   "major mode for displaying biomodels")

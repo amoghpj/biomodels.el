@@ -1,4 +1,11 @@
 ;; biomodels.el --- API for biomodels
+;;; Commentary:
+;;; Emacs interface to search the Biomodels database by description
+;;; TODO If the model has already been downloaded, fontify the row
+;;; TODO Add processing steps to unzip downloaded file
+;;; IDEA Add new action to pop up information about model in a *model info* buffer
+;;; IDEA Instead of the search/download API, use the model/download API to get the xpp file
+
 ;;; Code:
 
 (require 'request)
@@ -43,17 +50,14 @@ This returns the top 10 model IDs from biomodels"
                  (tabulated-list-print))
                ))))
 
-(defvar biomodels-mode-map
-  (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "m") 'biomodels-transient)
-   map))
 
 (define-transient-command biomodels-transient ()
   "Test Transient Title"
   ["Actions"
    ("d" "download" biomodels-download-model)])
 
-(defvar biomodels-download-folder "~/Documents/models/")
+(defvar biomodels-download-folder "~/Documents/models/"
+  "Location to download and extract the model files.")
 
 (defun biomodels-download-model()
   "Download model under point."
@@ -71,8 +75,19 @@ This returns the top 10 model IDs from biomodels"
                     (write-region data nil (concat
                                             biomodels-download-folder
                                             modelid
-                                            ".zip"))))))
-    )
-(define-derived-mode biomodels-mode tabulated-list-mode "biomodels"
-  "major mode for displaying biomodels")
+                                            ".zip"))))))))
+(defvar biomodels-mode-map
+  (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "m") 'biomodels-transient)
+    map)
+  "Keymap for biomodels-mode.")
+
+(define-derived-mode biomodels-mode tabulated-list-mode "Biomodels"
+  "major mode for displaying biomodels"
+  :keymap   (let ((map (make-sparse-keymap)))
+    (define-key map (kbd "m") 'biomodels-transient)
+    map))
+  ;(use-local-map biomodels-mode-map))
+
+(provide 'biomodels-mode)
 ;;; biomodels.el ends here

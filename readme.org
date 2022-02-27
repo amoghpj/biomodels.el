@@ -1,0 +1,40 @@
+#+TITLE: Introducing =biomodels.el=
+#+AUTHOR: Amogh Jalihal
+* Overview
+=biomodels.el= provides an interface via the BioModels API.
+* Data storage
+All data downloaded is stored in =biomodels-download-folder=
+The default value is =~/.biomodels/=
+
+* Quickstart
+1. Call =M-x biomodels-list= to show available model files
+2. If none are available, =biomodels.el= prompts for a search term
+
+Let's search for the term 'cell cycle'. 
+This retrieves the first 50 results for this search term.
+* Available actions 
+Hitting =a= pulls up the =biomodels-transient=, which displays the available actions.
+* Available actions - File Types
+- Downloading filetypes
+  1. SBML
+  2. PNG
+  3. XPP
+  4. PDF
+* "View" the wiring diagrams of different models
+Hit =a v= to download and view the auto-generated wiring diagrams.
+* Let us download a few cell cycle models
+Press =a s= to download the SBML files
+* View model files available offline
+Quit the view using =q=. 
+Restart the interface using =M-x biomodels-list=
+* Available actions - Model attributes
+- Features of the ODE Model
+  1. Species
+  2. Reactions
+* Proceed with model simulations by downloading the XPP files
+Hit =a x= to download and examine the XPP file corresponding to the model.
+* =biomodels.el= remembers what you've downloaded
+Redoing a search highlights the available offline files.
+Subsequent actions on file types or model attributes  uses the local copy of these files.
+* Feedback welcome!
+=github.com/amoghpj/biomodels.el=

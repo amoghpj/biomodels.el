@@ -1,10 +1,10 @@
 ;; biomodels.el --- API for biomodels
 ;;; Commentary:
 ;;; Emacs interface to search the Biomodels database by description
-;;; TODO If the model has already been downloaded, fontify the row
-;;; TODO Add processing steps to unzip downloaded file
+;;; This package allows users to download and interact with local biomodel files
+;;; DONE If the model has already been downloaded, fontify the row
 ;;; DONE Add new action to pop up information about model in a *model info* buffer
-;;; IDEA Instead of the search/download API, use the model/download API to get the xpp file
+;;; DONE Instead of the search/download API, use the model/download API to get the xpp file
 
 ;;; Code:
 
@@ -27,90 +27,133 @@
     (sbml . "zip"))
   "List of file types available for download.")
 
-(define-transient-command biomodels-download-transient ()
+(define-transient-command biomodels-transient ()
   "Test Transient Title"
-  ["Actions"
-   ("x" "XPP" biomodels-download-xpp)
-   ("p" "PNG" biomodels-download-png)
-   ("s" "SBML" biomodels-download-sbml)
-   ("P" "PDF" biomodels-download-pdf)
-   ("a" "All filetypes" biomodels-download-all-filetypes)
+  ["View model attributes"
+    ("S" "Get Species" biomodels-get-species)
+    ("R" "Get Reactions" biomodels-get-reactions)
+   ;;("a" "All filetypes" biomodels-download-or-find-all-filetypes)
+   ]
+  ["View file types"
+   ("x" "XPP" biomodels-download-or-find-xpp)
+   ("v" "View model (PNG)" biomodels-download-or-find-png)
+   ("s" "SBML" biomodels-download-or-find-sbml)
+   ("P" "PDF" biomodels-download-or-find-pdf)
+   ;;("a" "All filetypes" biomodels-download-or-find-all-filetypes)
    ])
 
-(defun biomodels-download-model (filetype)
+(defun biomodels-download-or-find-file (filetype)
   "Download model under point."
-  (let ((modelid (aref (tabulated-list-get-entry) 0)))
-    (message "%s" modelid)
-    (if (member (concat modelid "." filetype) (biomodels--local-models))
-        (message "%s already exists" modelid)
+  (let ((modelid (aref (tabulated-list-get-entry) 0))
+        (buffer-file-coding-system 'binary)
+        )
+    (message "%s" (concat biomodels-download-folder modelid "." filetype))
+    (if (file-exists-p (concat biomodels-download-folder modelid "." filetype))
+          (message "%s.%s already exists" modelid filetype)
       (progn 
+        (message "%s.%s does not exist" modelid filetype)
         (write-region (request-response-data
                        (request
-                         (format "https://www.ebi.ac.uk/biomodels/search/download/%s" modelid)
+                         (format "https://www.ebi.ac.uk/biomodels/model/download/%s" modelid)
                          :encoding 'binary
                          :params `(("filename" . ,(format "%s.%s" modelid filetype)))
                          :headers '(("accept" . "application/octet-stream"))
                          :sync t))
-                      nil (concat biomodels-download-folder modelid "." filetype))))))
+                      nil (concat biomodels-download-folder modelid "." filetype))))
+    (find-file-other-window (concat biomodels-download-folder modelid "." filetype))
+    modelid
+    ))
 
-(defun biomodels-download-sbml ()
+(defun biomodels-download-or-find-sbml ()
   ""
   (interactive)
-  (biomodels-download-model (cdr (assoc 'sbml biomodels-download-alist))))
+  (let ((modelid (aref (tabulated-list-get-entry) 0))
+        (buffer-file-coding-system 'binary)
+        (filetype "zip")
+        )
+    (message "%s" (concat biomodels-download-folder modelid "." filetype))
+    (if (file-exists-p (concat biomodels-download-folder modelid "." filetype))
+          (message "%s.%s already exists" modelid filetype)
+      (progn 
+        (message "%s.%s does not exist" modelid filetype)
+        (write-region (request-response-data
+                       (request
+                         "https://www.ebi.ac.uk/biomodels/search/download/"
+                         :encoding 'binary
+                         :params `(("models" . ,(format "%s" modelid)))
+                         :headers '(("accept" . "application/zip"))
+                         :error
+                         (cl-function (lambda (&rest args &key error-thrown &allow-other-keys)
+                                        (message "Got error: %S" error-thrown)))
+                         :sync t
+                         :status-code '((404 . (lambda (&rest _) (message "Got 404."))))
+                       )
+                      nil (concat biomodels-download-folder modelid "." filetype))))
+    modelid
+    )))
 
-(defun biomodels-download-png ()
+(defun biomodels-download-or-find-png ()
   ""
   (interactive)
-  (biomodels-download-model (cdr (assoc 'png biomodels-download-alist))))
+  (biomodels-download-or-find-file (cdr (assoc 'png biomodels-download-alist))))
 
-(defun biomodels-download-xpp ()
+(defun biomodels-download-or-find-xpp ()
   ""
   (interactive)
-  (biomodels-download-model (cdr (assoc 'xpp biomodels-download-alist))))
+  (biomodels-download-or-find-file (cdr (assoc 'xpp biomodels-download-alist))))
 
-(defun biomodels-download-pdf ()
+(defun biomodels-download-or-find-pdf ()
   ""
   (interactive)
-  (biomodels-download-model (cdr (assoc pdf biomodels-download-alist))))
+  (biomodels-download-or-find-file (cdr (assoc 'pdf biomodels-download-alist))))
 
 (defun biomodels-download-all-filetypes ()
   ""
   (interactive)
-  (biomodels-download-sbml)
-  (biomodels-download-png)
-  (biomodels-download-xpp)
-  (biomodels-download-pdf)
+  (biomodels-download-or-find-sbml)
+  (biomodels-download-or-find-png)
+  (biomodels-download-or-find-xpp)
+  (biomodels-download-or-find-pdf)
 )
 
+(defun biomodels--local-files (ext)
+  "Return list of local models."
+  (if (eq ext "all")
+      (directory-files biomodels-download-folder nil ".zip\\|.png\\|.pdf\\|.xpp")
+    (directory-files biomodels-download-folder nil ext))
+)
 
-(defun biomodels-get-local-models ()
+(defun biomodels-list ()
   "Make list of available files."
   (interactive)
   (let* (
-         ;;(models (s-split "\n" (shell-command-to-string (concat "ls " biomodels-download-folder "*.zip"))))
-         (models (biomodels--local-models))
+         (models (biomodels--local-files ".zip"))
          (ids  (map 'list 'file-name-base models))
-         (names (mapcar (lambda (x) (message "%s" (concat "./sbml-interface.py --model " biomodels-download-folder x " --description"))
-                          (shell-command-to-string (concat "./sbml-interface.py --model " biomodels-download-folder x ".zip --description"))) ids))
-         (columns [("ID" 20) ("Name" 100)])
-         (rows (mapcar* (lambda (x y)  `(nil [,x,y])) ids names)))
-    (message "%s" models)
-    (switch-to-buffer "*biomodels*")
-    (biomodels-mode)
-    (setq tabulated-list-format columns)
-    (setq tabulated-list-entries rows)
-    (tabulated-list-init-header)
-    (tabulated-list-print))
-    )
+         (names (mapcar (lambda (x) 
+                          (car (s-split "\n" (shell-command-to-string 
+                                              (concat "./sbml-interface.py --model "
+                                                      biomodels-download-folder 
+                                                      x 
+                                                      ".zip --description"))))) ids))
+         (status (mapcar (lambda (_) "Available") models))
+         (columns [("ID" 20) ("Status" 15)("Name" 100)])
+         (rows (mapcar* (lambda (id st nam)  `(nil [,id,st,nam])) ids status names)))
+    (if (eq (length models) 0)
+        (progn
+          (message "No models have been downloaded yet. Search online by keyword.")
+          (biomodels-search))
+      (progn
+        (switch-to-buffer "*biomodels*")
+        (biomodels-mode)
+        (setq tabulated-list-format columns)
+        (setq tabulated-list-entries rows)
+        (tabulated-list-init-header)
+        (tabulated-list-print)))))
 
-(defun biomodels--local-models ()
-  "Return list of local models."
-  (directory-files biomodels-download-folder nil ".zip\\|.png\\|.pdf\\|.xpp")
-)
 
 (defun biomodels-search ()
   "Search biomodels for searchterm.
-This returns the top 10 model IDs from biomodels"
+This returns the top 50 model IDs from biomodels"
   (interactive)
   (setq searchterm (read-string "Search: "))
   (message "Searching for: %s" searchterm)
@@ -125,11 +168,24 @@ This returns the top 10 model IDs from biomodels"
    :type "GET"
    :success (cl-function
              (lambda (&key data response &allow-other-keys)
+               (message "%s" (mapcar (lambda (x) (assoc-default 'id x)) (assoc-default 'models data)))
                (let* ((allmodels (assoc-default 'models data))
                       (ids (mapcar (lambda (x) (assoc-default 'id x)) allmodels))
+                      (downloaded (-uniq (mapcar (lambda (x) (car (s-split "\\." x)))(biomodels--local-files "zip"))))
+                      (faces (mapcar (lambda (x) (if 
+                                                     (member x downloaded)
+                                                     'biomodels-available-face
+                                                     'biomodels-not-available-face))
+                                     ids))
+                      (status (mapcar (lambda (x) (if 
+                                                     (member x downloaded)
+                                                     "Available"
+                                                     ""))
+                                     ids))
                       (names (mapcar (lambda (x) (assoc-default 'name x)) allmodels))
-                      (columns [("ID" 20)("Name" 100)])
-                      (rows (mapcar* (lambda (x y)  `(nil [,x,y])) ids names)))
+                      (columns [("ID" 20) ("Status" 15)("Name" 100)])
+                      (rows (mapcar* (lambda (id sta thisface name)  `(nil [,(propertize id 'font-lock-face thisface),(propertize sta 'font-lock-face thisface),(propertize name 'font-lock-face thisface)])) ids status
+faces  names)))
                  (switch-to-buffer "*biomodels*")
                  (biomodels-mode)
                  (setq tabulated-list-format columns)
@@ -137,8 +193,6 @@ This returns the top 10 model IDs from biomodels"
                  (tabulated-list-init-header)
                  (tabulated-list-print))
                ))))
-
-
 
 (defun biomodels-get-model-attribute (attype)
   "Display species in model under point."
@@ -165,25 +219,26 @@ This returns the top 10 model IDs from biomodels"
   ""
   (interactive)
   (biomodels-get-model-attribute 'reactions))
-
     
 (defvar biomodels-mode-map
   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "D") 'biomodels-download-transient)
-    (define-key map (kbd "s") 'biomodels-get-species)
-    (define-key map (kbd "r") 'biomodels-get-reactions)
+    (define-key map (kbd "a") 'biomodels-transient)
+    (define-key map (kbd "s") 'biomodels-search)
     map)
   "Keymap for biomodels-mode.")
 
 (define-derived-mode biomodels-mode tabulated-list-mode "Biomodels"
   "major mode for displaying biomodels"
   :keymap   (let ((map (make-sparse-keymap)))
-    (define-key map (kbd "D") 'biomodels-download-transient)
-;;    (define-key map (kbd "d") 'biomodels-download-model)
-    (define-key map (kbd "s") 'biomodels-get-species)
-    (define-key map (kbd "r") 'biomodels-get-reactions)
-    map))
-  ;(use-local-map biomodels-mode-map))
+              (define-key map (kbd "a") 'biomodels-transient)
+              ;; (define-key map (kbd "D") 'biomodels-download-transient)
+              ;; ;;    (define-key map (kbd "d") 'biomodels-download-model)
+              (define-key map (kbd "s") 'biomodels-search)
+              ;; (define-key map (kbd "S") 'biomodels-get-species)
+              ;; (define-key map (kbd "v") 'biomodels-download-or-find-png)
+              ;; (define-key map (kbd "R") 'biomodels-get-reactions)
+              map))
+
 
 (provide 'biomodels-mode)
 ;;; biomodels.el ends here

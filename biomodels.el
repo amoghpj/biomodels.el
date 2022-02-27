@@ -47,7 +47,6 @@
   (let ((modelid (aref (tabulated-list-get-entry) 0))
         (buffer-file-coding-system 'binary)
         )
-    (message "%s" (concat biomodels-download-folder modelid "." filetype))
     (if (file-exists-p (concat biomodels-download-folder modelid "." filetype))
           (message "%s.%s already exists" modelid filetype)
       (progn 
@@ -82,15 +81,10 @@
                          :encoding 'binary
                          :params `(("models" . ,(format "%s" modelid)))
                          :headers '(("accept" . "application/zip"))
-                         :error
-                         (cl-function (lambda (&rest args &key error-thrown &allow-other-keys)
-                                        (message "Got error: %S" error-thrown)))
-                         :sync t
-                         :status-code '((404 . (lambda (&rest _) (message "Got 404."))))
-                       )
+                         :sync t))
                       nil (concat biomodels-download-folder modelid "." filetype))))
     modelid
-    )))
+    ))
 
 (defun biomodels-download-or-find-png ()
   ""
@@ -122,6 +116,7 @@
       (directory-files biomodels-download-folder nil ".zip\\|.png\\|.pdf\\|.xpp")
     (directory-files biomodels-download-folder nil ext))
 )
+(defconst biomodels-src-dir (file-name-directory load-file-name))
 
 (defun biomodels-list ()
   "Make list of available files."
@@ -131,7 +126,7 @@
          (ids  (map 'list 'file-name-base models))
          (names (mapcar (lambda (x) 
                           (car (s-split "\n" (shell-command-to-string 
-                                              (concat "./sbml-interface.py --model "
+                                              (concat biomodels-src-dir "./sbml-interface.py --model "
                                                       biomodels-download-folder 
                                                       x 
                                                       ".zip --description"))))) ids))
@@ -168,7 +163,6 @@ This returns the top 50 model IDs from biomodels"
    :type "GET"
    :success (cl-function
              (lambda (&key data response &allow-other-keys)
-               (message "%s" (mapcar (lambda (x) (assoc-default 'id x)) (assoc-default 'models data)))
                (let* ((allmodels (assoc-default 'models data))
                       (ids (mapcar (lambda (x) (assoc-default 'id x)) allmodels))
                       (downloaded (-uniq (mapcar (lambda (x) (car (s-split "\\." x)))(biomodels--local-files "zip"))))
@@ -204,7 +198,7 @@ faces  names)))
     (setq buf (get-buffer-create (format "*biomodels -- %s %s*" modelid attribute)))
     (with-current-buffer buf
       (insert 
-       (shell-command-to-string (concat "./sbml-interface.py --model " biomodels-download-folder modelid ".zip " attribute))))
+       (shell-command-to-string (concat biomodels-src-dir "./sbml-interface.py --model " biomodels-download-folder modelid ".zip " attribute))))
     (switch-to-buffer buf)
     (goto-char (point-min))
     (special-mode)
